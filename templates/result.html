@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .buy-tickers {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .buy-tickers ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .buy-tickers li {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .no-results {
+            color: #999;
+            font-style: italic;
+            padding: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .details-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .ticker-details {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+        }
+        .ticker-details h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .ticker-details ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .ticker-details li {
+            padding: 5px 0;
+            color: #555;
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        button, .button {
+            padding: 12px 24px;
+            margin: 0 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.3s;
+        }
+        button:hover, .button:hover {
+            background-color: #45a049;
+        }
+        .back-button {
+            background-color: #008CBA;
+        }
+        .back-button:hover {
+            background-color: #007B9A;
+        }
+        .checkmark {
+            color: #4CAF50;
+        }
+        .crossmark {
+            color: #f44336;
+        }
+        @media print {
+            .button-container {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Stock Analysis Results</h1>
+    
+    <div class="buy-tickers">
+        <h2>Tickers Rated as 'BUY'</h2>
+        {% if buy_tickers %}
+            <ul>
+                {% for ticker in buy_tickers %}
+                    <li>{{ ticker }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="no-results">No tickers met all conditions.</p>
+        {% endif %}
+    </div>
+
+    {% if results %}
+    <h2>Condition Summary</h2>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Buy Ratings<br>&gt; 70%</th>
+                    <th>Market Cap<br>&gt; $100B</th>
+                    <th>Price Target<br>+15%</th>
+                    <th>Forward P/E<br>&lt; Benchmark</th>
+                    <th>Ownership<br>&gt; 70%</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in results %}
+                <tr>
+                    {% for item in row %}
+                    <td>
+                        {% if '✔️' in item %}
+                            <span class="checkmark">{{ item }}</span>
+                        {% elif '❌' in item %}
+                            <span class="crossmark">{{ item }}</span>
+                        {% else %}
+                            <strong>{{ item }}</strong>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Detailed Analysis</h2>
+    <div class="details-section">
+        {% for details in all_details %}
+            <div class="ticker-details">
+                <h3>{{ details[0] }}</h3>
+                <ul>
+                    {% for detail in details[1:] %}
+                        <li>{{ detail }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="no-results">No analysis results available.</p>
+    {% endif %}
+
+    <div class="button-container">
+        <a href="/" class="button back-button">New Analysis</a>
+        {% if results %}
+        <a href="/download_word" class="button">Download Word Report</a>
+        {% endif %}
+    </div>
+</body>
+</html>

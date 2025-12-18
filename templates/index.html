@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        button {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #777;
+            margin-top: 5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Valuation in 7-steps by Nikolay Stoykov</h1>
+    <div class="form-container">
+        <form action="/analyze" method="POST" id="analysisForm">
+            <label for="tickers">Enter tickers (comma-separated):</label>
+            <input type="text" id="tickers" name="tickers" placeholder="e.g., AAPL, MSFT, GOOGL" required>
+            <div class="help-text">Separate multiple tickers with commas</div>
+            
+            <label for="benchmark_forward_PE">Enter Benchmark Forward P/E:</label>
+            <input type="text" id="benchmark_forward_PE" name="benchmark_forward_PE" placeholder="e.g., 25.5" required pattern="[0-9]+(\.[0-9]+)?">
+            <div class="help-text">Enter a positive number (decimals allowed)</div>
+            
+            <button type="submit" id="submitBtn">Analyze Stocks</button>
+        </form>
+        <div class="loading" id="loadingMsg">
+            Analyzing stocks... This may take a moment.
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('analysisForm').addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingMsg = document.getElementById('loadingMsg');
+            
+            // Disable button and show loading message
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            loadingMsg.style.display = 'block';
+        });
+
+        // Validate benchmark P/E input
+        document.getElementById('benchmark_forward_PE').addEventListener('input', function(e) {
+            const value = e.target.value;
+            if (value && (isNaN(value) || parseFloat(value) <= 0)) {
+                e.target.setCustomValidity('Please enter a positive number');
+            } else {
+                e.target.setCustomValidity('');
+            }
+        });
+    </script>
+</body>
+</html>
