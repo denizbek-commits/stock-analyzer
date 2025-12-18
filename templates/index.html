@@ -73,15 +73,25 @@
             color: #4CAF50;
             font-weight: bold;
         }
+        .sp500-button {
+            background-color: #008CBA;
+        }
+        .sp500-button:hover {
+            background-color: #007B9A;
+        }
     </style>
 </head>
 <body>
-    <h1>Valuation in 7-steps by Nikolay Stoykov</h1>
+    <h1>Stock Analysis Tool</h1>
     <div class="form-container">
         <form action="/analyze" method="POST" id="analysisForm">
             <label for="tickers">Enter tickers (comma-separated):</label>
             <input type="text" id="tickers" name="tickers" placeholder="e.g., AAPL, MSFT, GOOGL" required>
-            <div class="help-text">Separate multiple tickers with commas</div>
+            <div class="help-text">Enter comma-separated tickers or use the S&P 500 button below</div>
+            
+            <button type="button" class="sp500-button" onclick="loadSP500()">
+                Load All S&P 500 Tickers
+            </button>
             
             <label for="benchmark_forward_PE">Enter Benchmark Forward P/E:</label>
             <input type="text" id="benchmark_forward_PE" name="benchmark_forward_PE" placeholder="e.g., 25.5" required pattern="[0-9]+(\.[0-9]+)?">
@@ -89,19 +99,38 @@
             
             <button type="submit" id="submitBtn">Analyze Stocks</button>
         </form>
+        
+        <div class="help-text" style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+            <strong>⚠️ Important Notes:</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>Analyzing 500 stocks takes approximately 10-15 minutes</li>
+                <li>You'll see real-time progress during analysis</li>
+                <li>Keep the page open until analysis completes</li>
+                <li>Results will be displayed automatically when ready</li>
+            </ul>
+        </div>
+        
         <div class="loading" id="loadingMsg">
-            Analyzing stocks... This may take a moment.
+            Starting analysis... Please wait.
         </div>
     </div>
 
     <script>
+        function loadSP500() {
+            // S&P 500 tickers
+            const sp500 = "AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,BRK.B,LLY,V,UNH,XOM,JPM,JNJ,WMT,MA,PG,HD,CVX,ABBV,MRK,COST,KO,PEP,AVGO,ADBE,TMO,CSCO,ACN,MCD,NFLX,LIN,ABT,DHR,NKE,CRM,TXN,PM,WFC,DIS,VZ,CMCSA,ORCL,INTC,NEE,UPS,RTX,HON,AMD,INTU,QCOM,PFE,BMY,COP,UNP,LOW,MS,CAT,AMGN,AMAT,BA,GE,T,SBUX,DE,ELV,MDT,SPGI,BLK,CVS,AXP,TJX,GILD,SYK,BKNG,MMC,ISRG,ADI,AMT,LRCX,PLD,ADP,ZTS,CI,VRTX,C,SCHW,BDX,MU,MDLZ,NOC,REGN,CB,SO,SLB,MO,DUK,FI,ETN,EQIX,EOG,ITW,MMM,BSX,GD,HCA,AON,APD,USB,CSX,NSC,ICE,TGT,PYPL,CME,PNC,KLAC,CL,SHW,PH,WM,MCK,FISV,GM,EMR,MAR,F,PSA,SNPS,FCX,MSI,MCO,TDG,COF,ROP,TT,APH,AJG,CDNS,ORLY,AFL,OXY,JCI,ECL,D,AIG,AEP,PSX,AZO,ADSK,HUM,SPG,NEM,CMG,SRE,PCG,DLR,EW,PCAR,NXPI,TRV,BK,GIS,CCI,TEL,FTNT,AMP,PAYX,CHTR,MCHP,O,MNST,EXC,WELL,PRU,ANET,RSG,KMI,ALL,HSY,CARR,DXCM,LHX,PANW,ROST,SYY,HLT,HPQ,CTSH,OKE,ED,CTAS,IQV,YUM,IDXX,KMB,DD,FDX,A,WMB,BIIB,EA,STZ,VRSK,DVN,APTV,KDP,DOW,KHC,XEL,FAST,DHI,GLW,KEYS,PPG,MSCI,WEC,ODFL,EXR,GWW,URI,RMD,CTVA,AME,MTD,CPRT,ANSS,VICI,PWR,SBAC,IR,ACGL,ROK,VMC,HWM,OTIS,WY,WAB,TSN,MLM,LEN,AVB,DFS,GEHC,HAL,CBRE,TYL,CDW,ULTA,ADM,MPWR,FITB,AEE,ILMN,ZBH,KVUE,ARE,LVS,DAL,BKR,GRMN,EQR,WTW,EBAY,TTWO,ETR,IFF,CAH,TROW,FANG,HBAN,PPL,LYB,IT,EFX,K,LUV,RJF,VTR,HPE,EIX,AES,DTE,FTV,STLD,DGX,BALL,PTC,NTRS,STE,RF,CSGP,IRM,FE,HIG,TDY,INVH,BR,EPAM,NTAP,MOH,TER,HUBB,CMS,LH,CFG,MAA,VRSN,BAX,XYL,EXPE,CNP,PODD,NI,ES,HOLX,PFG,WBD,GPN,AMCR,J,DRI,CBOE,WST,NVR,PHM,SYF,WAT,MTB,BBY,MKC,DLTR,MRNA,LDOS,JBHT,SWK,CINF,AKAM,STT,ALGN,ESS,TXT,TRGP,KEY,EXPD,ZBRA,SWKS,PKG,HST,FDS,BLDR,ATO,FLT,CAG,DOV,COO,POOL,EVRG,PNR,NDAQ,AVY,JKHY,BRO,DPZ,AXON,WDC,LYV,IP,NRG,LW,INCY,VTRS,IPG,CE,LKQ,ALLE,WRB,ALB,ROL,LNT,CPT,CTLT,BXP,CHRW,IEX,OMC,BBWI,KIM,UDR,CLX,TST,REG,CRL,CF,MAS,TECH,EL,PAYC,HSIC,AOS,BEN,ENPH,EMN,JNPR,SEDG,GL,BIO,TSCO,HII,HRL,CPB,TAP,AIZ,MOS,SNA,BWA,KMX,UHS,NWS,NWSA";
+            
+            document.getElementById('tickers').value = sp500;
+            alert('Loaded 500 S&P 500 tickers. Click "Analyze Stocks" to begin.');
+        }
+        
         document.getElementById('analysisForm').addEventListener('submit', function(e) {
             const submitBtn = document.getElementById('submitBtn');
             const loadingMsg = document.getElementById('loadingMsg');
             
             // Disable button and show loading message
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Processing...';
+            submitBtn.textContent = 'Starting Analysis...';
             loadingMsg.style.display = 'block';
         });
 
