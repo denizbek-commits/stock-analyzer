@@ -10,6 +10,7 @@ import finnhub
 from docx import Document
 import io
 import threading
+from requests.exceptions import HTTPError, RequestException
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_change_in_production')
@@ -17,29 +18,86 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_change_in_product
 # Finnhub client setup
 finnhub_client = finnhub.Client(api_key=os.environ.get('FINNHUB_API_KEY', 'cs97jkhr01qoa9gbio60cs97jkhr01qoa9gbio6g'))
 
-# In-memory storage for analysis progress (would use Redis in production)
+# In-memory storage for analysis progress
 analysis_status = {}
 analysis_results = {}
 
-# Cache results for 5 minutes
-@lru_cache(maxsize=500)
-def get_stock_data_cached(ticker, timestamp):
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        return info
-    except Exception as e:
-        print(f"Error fetching stock data for {ticker}: {e}")
-        return {}
+def fetch_with_retry(func, max_retries=5, initial_delay=3):
+    """Retry wrapper with exponential backoff"""
+    for attempt in range(max_retries):
+        try:
+            result = func()
+            if result:  # If we got data, return immediately
+                return result
+            # If no data but no error, retry
+            if attempt < max_retries - 1:
+                delay = initial_delay * (1.5 ** attempt)
+                print(f"No data returned, waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(delay)
+        except HTTPError as e:
+            if e.response.status_code == 429:  # Too Many Requests
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    print(f"Rate limited (429), waiting {delay}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(delay)
+                else:
+                    print(f"Max retries reached after 429 error")
+                    return None
+            else:
+                print(f"HTTP Error {e.response.status_code}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(initial_delay)
+                else:
+                    return None
+        except RequestException as e:
+            print(f"Request exception: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(initial_delay)
+            else:
+                return None
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(initial_delay)
+            else:
+                return None
+    return None
 
 def get_stock_data(ticker):
-    cache_timestamp = int(time.time() / 300)
-    return get_stock_data_cached(ticker, cache_timestamp)
+    """Fetch stock data with retry logic - no caching to avoid stale data"""
+    def fetch():
+        try:
+            print(f"Fetching data for {ticker}...")
+            stock = yf.Ticker(ticker)
+            
+            # Force fresh data fetch
+            info = stock.info
+            
+            # Validate we got meaningful data
+            if info and len(info) > 5:  # Should have more than just basic fields
+                print(f"Successfully fetched {len(info)} fields for {ticker}")
+                return info
+            else:
+                print(f"Insufficient data for {ticker}, got {len(info) if info else 0} fields")
+                return None
+        except Exception as e:
+            print(f"Error in get_stock_data for {ticker}: {e}")
+            return None
+    
+    result = fetch_with_retry(fetch, max_retries=5, initial_delay=3)
+    return result if result else {}
 
 def get_forward_PE(ticker):
     try:
         info = get_stock_data(ticker)
+        if not info:
+            print(f"No info available for forward PE of {ticker}")
+            return None
         forward_pe = info.get('forwardPE', None)
+        if forward_pe:
+            print(f"{ticker} forward PE: {forward_pe}")
+        else:
+            print(f"{ticker} forward PE not available in data")
         return forward_pe
     except Exception as e:
         print(f"Error fetching forward PE for {ticker}: {e}")
@@ -48,19 +106,26 @@ def get_forward_PE(ticker):
 def get_price_target_data(ticker):
     try:
         info = get_stock_data(ticker)
+        if not info:
+            print(f"No info available for price targets of {ticker}")
+            return None, None, None
         mean_price = info.get('targetMeanPrice', None)
         high_price = info.get('targetHighPrice', None)
         low_price = info.get('targetLowPrice', None)
+        print(f"{ticker} price targets - Mean: {mean_price}, High: {high_price}, Low: {low_price}")
         return mean_price, high_price, low_price
     except Exception as e:
         print(f"Error fetching price targets for {ticker}: {e}")
         return None, None, None
 
-@lru_cache(maxsize=500)
-def get_analyst_ratings_finnhub_cached(ticker, timestamp):
+def get_analyst_ratings_finnhub(ticker):
+    def fetch():
+        return finnhub_client.recommendation_trends(ticker)
+    
     try:
-        recommendations = finnhub_client.recommendation_trends(ticker)
+        recommendations = fetch_with_retry(fetch, max_retries=3, initial_delay=2)
         if not recommendations:
+            print(f"No analyst ratings for {ticker}")
             return None, 0
         
         latest_recommendation = recommendations[0]
@@ -74,20 +139,23 @@ def get_analyst_ratings_finnhub_cached(ticker, timestamp):
         
         buy_ratings = latest_recommendation.get('buy', 0) + latest_recommendation.get('strongBuy', 0)
         buy_percentage = (buy_ratings / total_ratings) * 100 if total_ratings > 0 else 0
+        print(f"{ticker} analyst ratings: {buy_percentage:.1f}% buy ({buy_ratings}/{total_ratings})")
         return buy_percentage, total_ratings
     except Exception as e:
         print(f"Error fetching analyst ratings for {ticker}: {e}")
         return None, 0
 
-def get_analyst_ratings_finnhub(ticker):
-    cache_timestamp = int(time.time() / 300)
-    return get_analyst_ratings_finnhub_cached(ticker, cache_timestamp)
-
 def get_ownership_data(ticker):
     try:
         info = get_stock_data(ticker)
+        if not info:
+            print(f"No info available for ownership of {ticker}")
+            return None, None, None
+            
         insiders = info.get('heldPercentInsiders', None)
         institutions = info.get('heldPercentInstitutions', None)
+        
+        print(f"{ticker} ownership - Insiders: {insiders}, Institutions: {institutions}")
         
         if insiders is None or institutions is None:
             insider_ownership = insiders * 100 if insiders is not None else None
@@ -104,12 +172,17 @@ def get_ownership_data(ticker):
         return None, None, None
 
 def check_all_conditions(ticker, benchmark_forward_PE):
+    print(f"\n{'='*60}")
+    print(f"Starting analysis for {ticker}")
+    print(f"{'='*60}")
+    
     info = get_stock_data(ticker)
     ticker_results = [ticker]
     details = [ticker]
     conditions_met = True
     
     # 1. Analyst Ratings Check
+    print(f"\n[{ticker}] Checking analyst ratings...")
     buy_percentage, buy_count = get_analyst_ratings_finnhub(ticker)
     if buy_percentage is None:
         ticker_results.append('❌ (Ratings Unavailable)')
@@ -124,7 +197,8 @@ def check_all_conditions(ticker, benchmark_forward_PE):
             ticker_results.append('✔️')
     
     # 2. Market Cap Check
-    market_cap = info.get('marketCap', 0) / 1e9
+    print(f"[{ticker}] Checking market cap...")
+    market_cap = info.get('marketCap', 0) / 1e9 if info.get('marketCap') else 0
     details.append(f"Market Cap: ${market_cap:.2f}B")
     if market_cap < 100:
         ticker_results.append('❌')
@@ -133,8 +207,9 @@ def check_all_conditions(ticker, benchmark_forward_PE):
         ticker_results.append('✔️')
     
     # 3. Price Target Check
+    print(f"[{ticker}] Checking price targets...")
     mean_price, high_price, low_price = get_price_target_data(ticker)
-    current_price = info.get('currentPrice', 0)
+    current_price = info.get('currentPrice', 0) if info.get('currentPrice') else 0
     details.append(f"Price Targets: Current=${current_price:.2f}, Mean=${mean_price}, High=${high_price}, Low=${low_price}")
     if mean_price is None or mean_price <= current_price * 1.15 or low_price < current_price:
         ticker_results.append('❌')
@@ -143,6 +218,7 @@ def check_all_conditions(ticker, benchmark_forward_PE):
         ticker_results.append('✔️')
     
     # 4. Forward PE Check
+    print(f"[{ticker}] Checking forward P/E...")
     forward_PE_next_year = get_forward_PE(ticker)
     details.append(f"Forward PE: {forward_PE_next_year if forward_PE_next_year is not None else 'N/A'} (Benchmark: {benchmark_forward_PE})")
     if forward_PE_next_year is None:
@@ -155,6 +231,7 @@ def check_all_conditions(ticker, benchmark_forward_PE):
         ticker_results.append('✔️')
     
     # 5. Ownership Check
+    print(f"[{ticker}] Checking ownership...")
     total_ownership, insider_ownership, institutional_ownership = get_ownership_data(ticker)
     if total_ownership is None:
         details.append(f"Ownership: Data unavailable (Insider: {insider_ownership if insider_ownership else 'N/A'}%, Institutional: {institutional_ownership if institutional_ownership else 'N/A'}%)")
@@ -167,6 +244,9 @@ def check_all_conditions(ticker, benchmark_forward_PE):
             conditions_met = False
         else:
             ticker_results.append('✔️')
+    
+    print(f"\n[{ticker}] Analysis complete - Conditions met: {conditions_met}")
+    print(f"{'='*60}\n")
     
     return ticker_results, conditions_met, details
 
@@ -185,31 +265,32 @@ def process_tickers_background(job_id, tickers, benchmark_forward_PE):
         'start_time': time.time()
     }
     
-    batch_size = 10  # Process 10 at a time with delay
+    print(f"\n{'#'*80}")
+    print(f"# Starting Job {job_id}: {total} tickers")
+    print(f"{'#'*80}\n")
     
     for i, ticker in enumerate(tickers):
         try:
-            print(f"[Job {job_id}] Processing {i+1}/{total}: {ticker}")
+            print(f"\n[Job {job_id}] Processing {i+1}/{total}: {ticker}")
             ticker_results, conditions_met, details = check_all_conditions(ticker, benchmark_forward_PE)
             results.append(ticker_results)
             all_details.append(details)
             if conditions_met:
                 buy_tickers.append(ticker)
+                print(f"✓ {ticker} meets all conditions!")
             
             # Update progress
             analysis_status[job_id]['current'] = i + 1
             analysis_status[job_id]['progress'] = int(((i + 1) / total) * 100)
             
-            # Rate limiting: delay every 10 stocks
-            if (i + 1) % batch_size == 0 and i < total - 1:
-                print(f"[Job {job_id}] Batch complete, waiting 3 seconds...")
-                time.sleep(3)
-            else:
-                time.sleep(0.8)  # 800ms between each ticker
+            # Rate limiting: longer delays to avoid 429 errors
+            if i < total - 1:
+                delay = 2.5  # 2.5 seconds between each ticker
+                print(f"Waiting {delay}s before next ticker...")
+                time.sleep(delay)
                 
         except Exception as e:
             print(f"[Job {job_id}] Error processing {ticker}: {e}")
-            # Add error entry
             results.append([ticker, '❌', '❌', '❌', '❌', '❌'])
             all_details.append([ticker, f"Error: {str(e)}"])
     
@@ -224,7 +305,10 @@ def process_tickers_background(job_id, tickers, benchmark_forward_PE):
     analysis_status[job_id]['status'] = 'completed'
     analysis_status[job_id]['progress'] = 100
     
-    print(f"[Job {job_id}] Analysis complete! Found {len(buy_tickers)} BUY candidates")
+    print(f"\n{'#'*80}")
+    print(f"# Job {job_id} Complete!")
+    print(f"# Found {len(buy_tickers)} BUY candidates out of {total} stocks")
+    print(f"{'#'*80}\n")
 
 def generate_word_report(results, details, buy_tickers):
     doc = Document()
